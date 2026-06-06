@@ -99,4 +99,4 @@ Review the script before running it on production or critical systems.
 
 ## License
 
-[LICENSE](MIT LICENSE)
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
