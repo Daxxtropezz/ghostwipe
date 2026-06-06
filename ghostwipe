@@ -1,0 +1,138 @@
+#!/bin/bash
+
+# ==========================================================
+#  SYSTEM MAINTENANCE & CACHE CLEANER
+# ==========================================================
+
+set -e
+
+show_banner() {
+    clear
+    figlet -f slant "Cache Cleaner" | lolcat
+    echo
+    fastfetch
+    echo
+    echo "[$(date '+%H:%M:%S')] User: $(whoami)" | lolcat
+    echo "[$(date '+%H:%M:%S')] Host: $(hostname)" | lolcat
+    echo
+}
+
+status() {
+    echo "[+] $1" | lolcat
+    sleep 1
+}
+
+run_updates() {
+    status "Updating package lists..."
+    sudo apt update
+
+    status "Upgrading installed packages..."
+    sudo apt upgrade -y
+
+    status "Removing unused packages..."
+    sudo apt autoremove -y
+
+    status "Cleaning package cache..."
+    sudo apt clean
+    sudo apt autoclean
+}
+
+clear_all() {
+    status "Purging /tmp ..."
+    sudo rm -rf /tmp/*
+
+    status "Purging /var/tmp ..."
+    sudo rm -rf /var/tmp/*
+
+    status "Cleaning APT cache..."
+    sudo apt clean
+    sudo apt autoclean
+    sudo apt autoremove -y
+
+    status "Removing user cache..."
+    rm -rf ~/.cache/*
+
+    status "Rotating system journals..."
+    sudo journalctl --rotate
+
+    status "Vacuuming journal logs..."
+    sudo journalctl --vacuum-time=1s
+
+    status "Removing old log files..."
+    sudo find /var/log -type f -name "*.log*" -delete
+}
+
+clear_old_cache() {
+    status "Removing files older than 7 days from /tmp ..."
+    sudo find /tmp -type f -atime +7 -delete
+
+    status "Removing files older than 7 days from /var/tmp ..."
+    sudo find /var/tmp -type f -atime +7 -delete
+
+    status "Cleaning APT cache..."
+    sudo apt clean
+    sudo apt autoclean
+    sudo apt autoremove -y
+
+    status "Clearing user cache..."
+    rm -rf ~/.cache/*
+
+    status "Vacuuming journals older than 7 days..."
+    sudo journalctl --vacuum-time=7d
+
+    status "Removing old log files..."
+    sudo find /var/log -type f -name "*.log*" -delete
+
+    sudo journalctl --rotate
+}
+
+show_banner
+
+echo "[ SYSTEM MAINTENANCE ]" | lolcat
+echo
+read -rp "Run system update & cleanup? [Y/n]: " update_choice
+
+if [[ ! "$update_choice" =~ ^[Nn]$ ]]; then
+    run_updates
+fi
+
+echo
+read -rp "Perform advanced cache cleanup? [y/N]: " cleanup_choice
+
+if [[ "$cleanup_choice" =~ ^[Yy]$ ]]; then
+
+    clear
+
+    figlet -f slant "Cyber Clean" | lolcat
+    echo
+    fastfetch
+    echo
+
+    echo "[1] Full System Purge" | lolcat
+    echo "[2] Remove Cache Older Than 7 Days" | lolcat
+    echo "[0] Exit" | lolcat
+    echo
+
+    read -rp "Select option [2]: " option
+    option=${option:-2}
+
+    case "$option" in
+        1)
+            clear_all
+            ;;
+        2)
+            clear_old_cache
+            ;;
+        0)
+            exit 0
+            ;;
+        *)
+            echo "Invalid option."
+            exit 1
+            ;;
+    esac
+fi
+
+echo
+figlet -f small "COMPLETE" | lolcat
+echo "[✓] Maintenance completed successfully." | lolcat
