@@ -17,9 +17,7 @@ A lightweight Linux maintenance utility that automates system updates, package u
   * Full System Purge
   * Cache cleanup for files older than 7 days
 
-## Prerequisites
-
-Ghostwipe is designed for Debian-based Linux distributions that use APT, including:
+## Supported Distributions
 
 * Ubuntu
 * Debian
@@ -27,67 +25,61 @@ Ghostwipe is designed for Debian-based Linux distributions that use APT, includi
 * Pop!_OS
 * Elementary OS
 
-Install the required dependencies:
+## Installation
+
+### Ubuntu / Linux Mint / Pop!_OS
+
+Add the Ghostwipe PPA:
+
+```bash
+sudo add-apt-repository ppa:daxxtropezz/ghostwipe
+sudo apt update
+sudo apt install ghostwipe
+```
+
+### Manual Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/daxxtropezz/ghostwipe.git
+cd ghostwipe
+```
+
+Install dependencies:
 
 ```bash
 sudo apt update
 sudo apt install figlet lolcat fastfetch
 ```
 
-## Installation
-
-Clone the repository:
-
-```bash
-git clone https://github.com/yourusername/ghostwipe.git
-cd ghostwipe
-```
-
-Make sure the script is executable:
+Install Ghostwipe:
 
 ```bash
 chmod +x ghostwipe
-```
-
-Install Ghostwipe system-wide:
-
-```bash
 sudo install -m 755 ghostwipe /usr/local/bin/ghostwipe
-```
-
-Verify the installation:
-
-```bash
-which ghostwipe
-```
-
-Expected output:
-
-```text
-/usr/local/bin/ghostwipe
 ```
 
 ## Usage
 
-Run Ghostwipe from anywhere in your terminal:
+Run from any terminal:
 
 ```bash
 ghostwipe
 ```
 
-The utility will:
+The utility can:
 
-1. Display system information and status.
-2. Ask whether to run package updates and cleanup.
-3. Optionally perform advanced cache cleanup.
-4. Allow choosing between:
-
-   * Full System Purge
-   * Remove Cache Older Than 7 Days
+* Update system packages
+* Clean APT caches
+* Remove temporary files
+* Clear user cache
+* Rotate and vacuum journal logs
+* Perform advanced cleanup operations
 
 ## Warning
 
-The **Full System Purge** option permanently removes:
+The Full System Purge option permanently removes:
 
 * Contents of `/tmp`
 * Contents of `/var/tmp`
@@ -95,7 +87,7 @@ The **Full System Purge** option permanently removes:
 * Old journal logs
 * Rotated log files
 
-Review the script before running it on production or critical systems.
+Review the script before using it on production or mission-critical systems.
 
 ## License
 
