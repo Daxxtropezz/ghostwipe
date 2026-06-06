@@ -1,138 +1,326 @@
 #!/bin/bash
 
 # ==========================================================
-#  SYSTEM MAINTENANCE & CACHE CLEANER
+# Ghostwipe
+# Linux Maintenance & Cleanup Utility
+# Version: 2.1.0
+# Author: Daxxtropezz
+# Repository: github.com/Daxxtropezz/ghostwipe
+# Package: Launchpad PPA
 # ==========================================================
 
 set -e
 
+VERSION="2.1.0"
+AUTHOR="Daxxtropezz"
+LOGFILE="/tmp/ghostwipe.log"
+
+# Colorize function - makes lolcat optional
+colorize() {
+    if command -v lolcat >/dev/null 2>&1; then
+        lolcat
+    else
+        cat
+    fi
+}
+
+log() {
+    echo "[$(date '+%F %T')] $1" >> "$LOGFILE"
+}
+
+info() {
+    echo "[INFO] $1"
+    log "$1"
+}
+
+success() {
+    echo "[SUCCESS] $1"
+    log "$1"
+}
+
+warning() {
+    echo "[WARNING] $1"
+    log "$1"
+}
+
+error() {
+    echo "[ERROR] $1"
+    log "$1"
+}
+
 show_banner() {
     clear
-    figlet -f slant "Cache Cleaner" | lolcat
+    
+    # Always show Ghostwipe banner with figlet and lolcat
+    if command -v figlet >/dev/null 2>&1; then
+        figlet -f slant "Ghostwipe" | colorize
+    else
+        echo "[NOTICE] figlet not installed - showing text banner" | colorize
+        echo "Install figlet for enhanced visual display: sudo apt install figlet" | colorize
+        echo
+    fi
+
     echo
-    fastfetch
-    echo
-    echo "[$(date '+%H:%M:%S')] User: $(whoami)" | lolcat
-    echo "[$(date '+%H:%M:%S')] Host: $(hostname)" | lolcat
+    echo "Linux Maintenance & Cleanup Utility" | colorize
+    echo "Author     : $AUTHOR" | colorize
+    echo "Version    : $VERSION" | colorize
+    echo "Repository : github.com/Daxxtropezz/ghostwipe" | colorize
+    echo "Package    : Launchpad PPA" | colorize
+    echo "--------------------------------------------" | colorize
+    echo "Hostname: $(hostname)" | colorize
+    echo "User    : $(whoami)" | colorize
+    echo "OS      : $(grep PRETTY_NAME /etc/os-release | cut -d '"' -f2)" | colorize
+    echo "Kernel  : $(uname -r)" | colorize
+    echo "Date    : $(date '+%Y-%m-%d %H:%M:%S')" | colorize
     echo
 }
 
-status() {
-    echo "[+] $1" | lolcat
-    sleep 1
+show_system_info() {
+    show_banner
+    
+    if command -v fastfetch >/dev/null 2>&1; then
+        fastfetch
+    elif command -v neofetch >/dev/null 2>&1; then
+        neofetch
+    else
+        info "Install fastfetch or neofetch for detailed system information"
+        echo
+        echo "System Information Summary:"
+        echo "---------------------------"
+        echo "Distribution: $(grep PRETTY_NAME /etc/os-release | cut -d '"' -f2)"
+        echo "Kernel: $(uname -r)"
+        echo "Uptime: $(uptime -p)"
+        echo "Memory: $(free -h | awk '/^Mem:/ {print $3 "/" $2}')"
+        echo "Disk: $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
+    fi
+    
+    echo
 }
 
 run_updates() {
-    status "Updating package lists..."
-    sudo apt update
-
-    status "Upgrading installed packages..."
+    echo
+    info "Updating package repositories..."
+    sudo apt update -y >/dev/null
+    success "Package repositories updated"
+    
+    echo
+    info "Upgrading installed packages..."
     sudo apt upgrade -y
-
-    status "Removing unused packages..."
-    sudo apt autoremove -y
-
-    status "Cleaning package cache..."
+    success "System packages upgraded"
+    
+    echo
+    info "Removing unused packages..."
+    sudo apt autoremove -y >/dev/null
+    success "Unused packages removed"
+    
+    echo
+    info "Cleaning package cache..."
     sudo apt clean
-    sudo apt autoclean
+    sudo apt autoclean -y >/dev/null 2>&1 || true
+    success "APT cache cleaned"
 }
 
-clear_all() {
-    status "Purging /tmp ..."
-    sudo rm -rf /tmp/*
-
-    status "Purging /var/tmp ..."
-    sudo rm -rf /var/tmp/*
-
-    status "Cleaning APT cache..."
-    sudo apt clean
-    sudo apt autoclean
-    sudo apt autoremove -y
-
-    status "Removing user cache..."
-    rm -rf ~/.cache/*
-
-    status "Rotating system journals..."
-    sudo journalctl --rotate
-
-    status "Vacuuming journal logs..."
-    sudo journalctl --vacuum-time=1s
-
-    status "Removing old log files..."
-    sudo find /var/log -type f -name "*.log*" -delete
-}
-
-clear_old_cache() {
-    status "Removing files older than 7 days from /tmp ..."
-    sudo find /tmp -type f -atime +7 -delete
-
-    status "Removing files older than 7 days from /var/tmp ..."
-    sudo find /var/tmp -type f -atime +7 -delete
-
-    status "Cleaning APT cache..."
+safe_cleanup() {
+    echo
+    info "Removing files older than 7 days from /tmp..."
+    sudo find /tmp -type f -atime +7 -delete 2>/dev/null || true
+    
+    echo
+    info "Removing files older than 7 days from /var/tmp..."
+    sudo find /var/tmp -type f -atime +7 -delete 2>/dev/null || true
+    
+    echo
+    info "Cleaning package cache..."
     sudo apt clean
     sudo apt autoclean
     sudo apt autoremove -y
-
-    status "Clearing user cache..."
-    rm -rf ~/.cache/*
-
-    status "Vacuuming journals older than 7 days..."
-    sudo journalctl --vacuum-time=7d
-
-    status "Removing old log files..."
-    sudo find /var/log -type f -name "*.log*" -delete
-
-    sudo journalctl --rotate
+    
+    echo
+    info "Clearing user cache..."
+    rm -rf ~/.cache/* 2>/dev/null || true
+    
+    echo
+    info "Vacuuming journals older than 7 days..."
+    sudo journalctl --vacuum-time=7d >/dev/null 2>&1 || true
+    
+    echo
+    info "Removing rotated log files..."
+    sudo find /var/log -type f -name "*.log*" -delete 2>/dev/null || true
+    
+    sudo journalctl --rotate >/dev/null 2>&1 || true
+    
+    echo
+    success "Safe cleanup completed"
 }
 
-show_banner
-
-echo "[ SYSTEM MAINTENANCE ]" | lolcat
-echo
-read -rp "Run system update & cleanup? [Y/n]: " update_choice
-
-if [[ ! "$update_choice" =~ ^[Nn]$ ]]; then
-    run_updates
-fi
-
-echo
-read -rp "Perform advanced cache cleanup? [y/N]: " cleanup_choice
-
-if [[ "$cleanup_choice" =~ ^[Yy]$ ]]; then
-
-    clear
-
-    figlet -f slant "Cyber Clean" | lolcat
+deep_cleanup() {
     echo
-    fastfetch
+    warning "Deep Cleanup selected"
     echo
-
-    echo "[1] Full System Purge" | lolcat
-    echo "[2] Remove Cache Older Than 7 Days" | lolcat
-    echo "[0] Exit" | lolcat
+    warning "Deep Cleanup will perform the following:"
     echo
+    echo " • Remove ALL temporary files"
+    echo " • Clear user cache completely"
+    echo " • Remove ALL old logs"
+    echo " • Vacuum ALL system journals"
+    echo
+    echo "This action cannot be undone."
+    echo
+    
+    read -rp "Continue? [y/N]: " confirm
+    
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        warning "Operation cancelled"
+        exit 0
+    fi
+    
+    echo
+    info "Purging /tmp..."
+    sudo rm -rf /tmp/* 2>/dev/null || true
+    
+    echo
+    info "Purging /var/tmp..."
+    sudo rm -rf /var/tmp/* 2>/dev/null || true
+    
+    echo
+    info "Cleaning package cache..."
+    sudo apt clean
+    sudo apt autoclean
+    sudo apt autoremove -y
+    
+    echo
+    info "Removing user cache..."
+    rm -rf ~/.cache/* 2>/dev/null || true
+    
+    echo
+    info "Rotating journals..."
+    sudo journalctl --rotate >/dev/null 2>&1 || true
+    
+    echo
+    info "Vacuuming ALL journal logs..."
+    sudo journalctl --vacuum-time=1s >/dev/null 2>&1 || true
+    
+    echo
+    info "Removing old log files..."
+    sudo find /var/log -type f -name "*.log*" -delete 2>/dev/null || true
+    
+    echo
+    success "Deep cleanup completed"
+}
 
-    read -rp "Select option [2]: " option
-    option=${option:-2}
+show_menu() {
+    while true; do
+        show_banner
+        
+        echo "[1] System Update & Upgrade" | colorize
+        echo "[2] Safe Cleanup (Recommended)" | colorize
+        echo "[3] Deep Cleanup" | colorize
+        echo "[4] System Information" | colorize
+        echo "[5] Full Maintenance" | colorize
+        echo "[0] Exit" | colorize
+        echo
+        
+        read -rp "Select an option: " option
+        
+        echo
+        
+        case "$option" in
+            1)
+                run_updates
+                ;;
+            2)
+                safe_cleanup
+                ;;
+            3)
+                deep_cleanup
+                ;;
+            4)
+                show_system_info
+                read -rp "Press Enter to continue..."
+                ;;
+            5)
+                run_updates
+                safe_cleanup
+                ;;
+            0)
+                echo
+                echo "Goodbye." | colorize
+                exit 0
+                ;;
+            *)
+                error "Invalid option"
+                ;;
+        esac
+        
+        if [[ "$option" =~ ^[1-5]$ ]]; then
+            echo
+            success "Task completed"
+            echo
+            read -rp "Press Enter to continue..."
+        fi
+    done
+}
 
-    case "$option" in
-        1)
-            clear_all
-            ;;
-        2)
-            clear_old_cache
-            ;;
-        0)
-            exit 0
-            ;;
-        *)
-            echo "Invalid option."
-            exit 1
-            ;;
-    esac
-fi
+show_version() {
+    echo "Ghostwipe v$VERSION" | colorize
+    echo "Author: $AUTHOR" | colorize
+}
 
-echo
-figlet -f small "COMPLETE" | lolcat
-echo "[✓] Maintenance completed successfully." | lolcat
+show_help() {
+    cat << EOF
+Ghostwipe v$VERSION
+
+Usage:
+  ghostwipe                Launch interactive menu
+  ghostwipe update         Update and upgrade system
+  ghostwipe clean          Safe cleanup
+  ghostwipe deep-clean     Deep cleanup
+  ghostwipe info           Show system information
+  ghostwipe version        Show version
+  ghostwipe help           Show help
+
+EOF
+}
+
+# Main command handler
+case "${1:-}" in
+    update)
+        show_banner
+        run_updates
+        ;;
+    
+    clean)
+        show_banner
+        safe_cleanup
+        ;;
+    
+    deep-clean)
+        show_banner
+        deep_cleanup
+        ;;
+    
+    info)
+        show_system_info
+        ;;
+    
+    version|--version|-v)
+        show_version
+        ;;
+    
+    help|--help|-h)
+        show_help
+        ;;
+    
+    "")
+        show_menu
+        ;;
+    
+    *)
+        error "Unknown command: $1"
+        echo
+        show_help
+        exit 1
+        ;;
+esac
+
+exit 0
