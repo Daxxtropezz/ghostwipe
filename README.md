@@ -63,10 +63,7 @@ Ghostwipe is designed for Debian-based Linux distributions:
 | --------------------------- | --------- |
 | Ubuntu Jammy (22.04 LTS)    | ✅         |
 | Ubuntu Resolute (26.04 LTS) | ✅         |
-| Debian                      | ✅         |
-| Linux Mint                  | ✅         |
-| Pop!_OS                     | ✅         |
-| Elementary OS               | ✅         |
+| Ubuntu Noble (24.04 LTS)    | ✅         |
 
 ---
 

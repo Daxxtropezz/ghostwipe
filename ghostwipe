@@ -3,7 +3,7 @@
 # ==========================================================
 # Ghostwipe
 # Linux Maintenance & Cleanup Utility
-# Version: 2.1.0
+# Version: 2.0.0
 # Author: Daxxtropezz
 # Repository: github.com/Daxxtropezz/ghostwipe
 # Package: Launchpad PPA
@@ -11,7 +11,7 @@
 
 set -e
 
-VERSION="2.1.0"
+VERSION="2.0.0"
 AUTHOR="Daxxtropezz"
 LOGFILE="/tmp/ghostwipe.log"
 
