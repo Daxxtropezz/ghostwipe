@@ -1,0 +1,22 @@
+Source: ghostwipe
+Section: utils
+Priority: optional
+Maintainer: Daxxtropezz <miraflores.john@gmail.com>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+Standards-Version: 4.7.2
+Homepage: https://github.com/daxxtropezz/ghostwipe
+
+Package: ghostwipe
+Architecture: all
+Depends:
+ ${misc:Depends}, bash, figlet, lolcat, fastfetch
+Description: Linux maintenance and cache cleaning utility
+ Ghostwipe automates package updates, cache cleanup,
+ temporary file removal, journal maintenance, and
+ routine housekeeping tasks for Debian-based systems.
+ .
+ It provides both standard maintenance operations and
+ advanced cleanup options through an interactive
+ terminal interface.

@@ -1,0 +1,11 @@
+ghostwipe (2.0.0-2) noble; urgency=medium
+
+  * Modern CLI launch in noble
+
+ -- Daxxtropezz <miraflores.john@gmail.com>  Sun, 07 Jun 2026 11:49:34 +0800
+
+ghostwipe (2.0.0-1) resolute; urgency=medium
+
+  * Update to version 2. Modernized CLI.
+
+ -- Daxxtropezz <miraflores.john@gmail.com>  Sat, 06 Jun 2026 22:51:17 +0800
