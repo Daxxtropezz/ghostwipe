@@ -1,8 +1,8 @@
-ghostwipe (2.0.0-2) noble; urgency=medium
+ghostwipe (2.0.2~resolute) resolute; urgency=medium
 
-  * Modern CLI launch in noble
+  * Update format version consistency.
 
- -- Daxxtropezz <miraflores.john@gmail.com>  Sun, 07 Jun 2026 11:49:34 +0800
+ -- Daxxtropezz <miraflores.john@gmail.com>  Sun, 07 Jun 2026 19:47:30 +0800
 
 ghostwipe (2.0.0-1) resolute; urgency=medium
 
