@@ -1,13 +1,22 @@
-# Ghostwipe
 
 <div align="center">
 
-**Linux Maintenance & Cleanup Utility**
+# ghostwipe
+<p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-Jammy%20%7C%20Resolute-orange.svg)](https://ubuntu.com/)
-[![PPA](https://img.shields.io/badge/PPA-Available-brightgreen.svg)](https://launchpad.net/~daxxtropezz/+archive/ubuntu/ghostwipe)
-[![Bash](https://img.shields.io/badge/Bash-Script-blue.svg)](https://www.gnu.org/software/bash/)
+  <img src="assets/logo.png" alt="ZeroTrustKit Logo" width="200">
+</p>
+
+<p>
+
+**A Linux Maintenance & Cleanup Utility**
+</p>
+<p>
+  <img src="https://img.shields.io/badge/version-2.0.2-blue.svg">
+  <img src="https://img.shields.io/badge/platform-Ubuntu-orange.svg">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg">
+  <img src="https://img.shields.io/badge/status-active-success.svg">
+</p>
 
 *A lightweight and professional Linux maintenance utility for Debian-based distributions.*
 
@@ -17,9 +26,19 @@
 
 ## Overview
 
-Ghostwipe is an open-source system maintenance utility designed to simplify routine Linux administration tasks. It automates package updates, cache cleanup, temporary file management, journal maintenance, and general system housekeeping through both an interactive menu and command-line subcommands.
+`ghostwipe` is an open-source system maintenance utility designed to simplify routine Linux administration tasks. It automates package updates, cache cleanup, temporary file management, journal maintenance, and general system housekeeping through both an interactive menu and command-line subcommands.
 
-Whether you're a Linux enthusiast, system administrator, or power user, Ghostwipe helps keep your system secure, organized, and running efficiently.
+Whether you're a Linux enthusiast, system administrator, or power user, `ghostwipe` helps keep your system secure, organized, and running efficiently.
+
+---
+
+## Preview
+
+<p align="center">
+
+  <img src="assets/screenshot-1.png" alt="ZeroTrustKit Logo" width="500">
+  <img src="assets/screenshot-2.png" alt="ZeroTrustKit Logo" width="500">
+</p>
 
 ---
 
@@ -57,7 +76,7 @@ Whether you're a Linux enthusiast, system administrator, or power user, Ghostwip
 
 ## Supported Distributions
 
-Ghostwipe is designed for Debian-based Linux distributions:
+`ghostwipe` is designed for Debian-based Linux distributions:
 
 | Distribution                | Supported |
 | --------------------------- | --------- |
@@ -71,7 +90,7 @@ Ghostwipe is designed for Debian-based Linux distributions:
 
 ### Method 1: Launchpad PPA (Recommended)
 
-Install Ghostwipe directly from the official Launchpad PPA:
+Install `ghostwipe` directly from the official Launchpad PPA:
 
 ```bash
 sudo add-apt-repository ppa:daxxtropezz/ghostwipe
@@ -97,7 +116,7 @@ sudo apt update
 sudo apt install figlet lolcat fastfetch
 ```
 
-Install Ghostwipe system-wide:
+Install `ghostwipe` system-wide:
 
 ```bash
 chmod +x ghostwipe
