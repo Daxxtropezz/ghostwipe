@@ -1,11 +1,5 @@
-ghostwipe (2.0.2~resolute) resolute; urgency=medium
+ghostwipe (2.1.1~resolute) resolute; urgency=medium
 
-  * Update format version consistency.
+  * Fix: Remove unused variables.
 
- -- Daxxtropezz <miraflores.john@gmail.com>  Sun, 07 Jun 2026 19:47:30 +0800
-
-ghostwipe (2.0.0-1) resolute; urgency=medium
-
-  * Update to version 2. Modernized CLI.
-
- -- Daxxtropezz <miraflores.john@gmail.com>  Sat, 06 Jun 2026 22:51:17 +0800
+ -- Daxxtropezz <miraflores.john@gmail.com>  Mon, 31 Aug 2026 17:00:56 +0800
