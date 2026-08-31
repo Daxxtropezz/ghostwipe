@@ -3,14 +3,14 @@
 # ==============================================================================
 # Ghostwipe
 # Cross-Platform Maintenance & Cleanup Utility
-# Version: 2.1.1
+# Version: 2.1.2
 # Author: Daxxtropezz
 # Repository: https://github.com/Daxxtropezz/ghostwipe
 # ==============================================================================
 
 set -Eeuo pipefail
 
-APP_VERSION="2.1.1"
+APP_VERSION="2.1.2"
 AUTHOR="Daxxtropezz"
 REPOSITORY="https://github.com/Daxxtropezz/ghostwipe"
 

@@ -1,4 +1,4 @@
-ghostwipe (2.1.1~resolute) resolute; urgency=medium
+ghostwipe (2.1.2~resolute) resolute; urgency=medium
 
   * Fix: Remove unused variables.
 
