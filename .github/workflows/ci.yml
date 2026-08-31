@@ -1,0 +1,339 @@
+name: Ghostwipe CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "ghostwipe"
+      - ".github/workflows/ci.yml"
+
+  pull_request:
+    paths:
+      - "ghostwipe"
+      - ".github/workflows/ci.yml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: ghostwipe-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================
+  # LAYER 1: STATIC VALIDATION
+  # ============================================================
+
+  lint:
+    name: Bash Syntax & ShellCheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Check executable
+        run: |
+          test -f ghostwipe
+          test -x ghostwipe
+
+      - name: Bash syntax check
+        run: |
+          bash -n ghostwipe
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: |
+          shellcheck -x -S warning ghostwipe
+
+  # ============================================================
+  # LAYER 2: CROSS-PLATFORM RUNTIME VALIDATION
+  # ============================================================
+
+  runtime:
+    name: ${{ matrix.name }} Runtime Tests
+    needs: lint
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        include:
+          - name: Linux AMD64
+            os: ubuntu-latest
+            platform: linux
+
+          - name: macOS Apple Silicon
+            os: macos-latest
+            platform: macos
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Prepare Ghostwipe
+        run: |
+          chmod +x ghostwipe
+
+      - name: Remove unrelated Homebrew taps
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          if brew tap | grep -qx 'aws/tap'; then
+            echo "Removing unrelated aws/tap from CI runner..."
+            brew untap aws/tap
+          fi
+
+      - name: Install modern Bash on macOS
+        if: matrix.platform == 'macos'
+        run: |
+          brew install bash
+
+      - name: Set Bash executable
+        id: bash
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == "macos" ]]; then
+            echo "path=$(brew --prefix bash)/bin/bash" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=$(command -v bash)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Show environment
+        run: |
+          uname -a
+          uname -m
+          "${{ steps.bash.outputs.path }}" --version | head -1
+
+      - name: Test version
+        run: |
+          output="$("${{ steps.bash.outputs.path }}" ./ghostwipe --version)"
+
+          printf '%s\n' "$output"
+
+          echo "$output" |
+            grep -Eq '^Ghostwipe v[0-9]+\.[0-9]+\.[0-9]+$'
+
+      - name: Test short version
+        run: |
+          "${{ steps.bash.outputs.path }}" ./ghostwipe -v |
+            grep -Eq '^Ghostwipe v[0-9]+\.[0-9]+\.[0-9]+$'
+
+      - name: Test help
+        run: |
+          output="$("${{ steps.bash.outputs.path }}" ./ghostwipe --help)"
+
+          printf '%s\n' "$output"
+
+          echo "$output" | grep -q "Ghostwipe"
+
+      - name: Test short help
+        run: |
+          "${{ steps.bash.outputs.path }}" ./ghostwipe -h |
+            grep -q "Ghostwipe"
+
+      - name: Test doctor
+        run: |
+          "${{ steps.bash.outputs.path }}" ./ghostwipe doctor
+
+      - name: Reject unknown option
+        shell: bash
+        run: |
+          if "${{ steps.bash.outputs.path }}" ./ghostwipe --definitely-invalid-option; then
+            echo "ERROR: Unknown option unexpectedly returned success."
+            exit 1
+          fi
+
+  # ============================================================
+  # LAYER 3: CI SECURITY LAYER
+  # ============================================================
+
+  security:
+    name: Cleanup Safety Tests
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Prepare Ghostwipe
+        run: |
+          chmod +x ghostwipe
+
+      # --------------------------------------------------------
+      # Static guardrails
+      #
+      # These patterns represent cleanup behavior that should
+      # never return to Ghostwipe.
+      # --------------------------------------------------------
+
+      - name: Check for dangerous cleanup patterns
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dangerous_patterns=(
+            'rm -rf /tmp/\*'
+            'rm -rf /var/tmp/\*'
+            'rm -rf ~/.cache/\*'
+            'find /var/log .* -delete'
+            'journalctl --vacuum-time=1s'
+          )
+
+          failed=0
+
+          for pattern in "${dangerous_patterns[@]}"; do
+            if grep -En "$pattern" ghostwipe; then
+              echo "::error::Dangerous cleanup pattern detected: $pattern"
+              failed=1
+            fi
+          done
+
+          if [[ "$failed" -ne 0 ]]; then
+            echo "Ghostwipe security guardrail failed."
+            exit 1
+          fi
+
+          echo "No prohibited cleanup patterns detected."
+
+      # --------------------------------------------------------
+      # Create disposable test environment.
+      #
+      # Nothing outside this directory should be modified.
+      # --------------------------------------------------------
+
+      - name: Create protected test files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$RUNNER_TEMP/ghostwipe-security/protected"
+          mkdir -p "$RUNNER_TEMP/ghostwipe-security/cache"
+
+          echo "DO NOT DELETE" \
+            > "$RUNNER_TEMP/ghostwipe-security/protected/sentinel.txt"
+
+          echo "TEST CACHE" \
+            > "$RUNNER_TEMP/ghostwipe-security/cache/test.cache"
+
+          sha256sum \
+            "$RUNNER_TEMP/ghostwipe-security/protected/sentinel.txt" \
+            > "$RUNNER_TEMP/ghostwipe-security/sentinel.sha256"
+
+      # --------------------------------------------------------
+      # Dry-run tests
+      #
+      # IMPORTANT:
+      # Do not add --yes here.
+      # --------------------------------------------------------
+
+      - name: Dry-run clean
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          timeout 30 \
+            ./ghostwipe --dry-run clean
+
+      - name: Dry-run deep clean
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          timeout 30 \
+            ./ghostwipe --dry-run deep-clean
+
+      # --------------------------------------------------------
+      # Verify our sentinel survived.
+      # --------------------------------------------------------
+
+      - name: Verify protected file survived
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f \
+            "$RUNNER_TEMP/ghostwipe-security/protected/sentinel.txt"
+
+          sha256sum -c \
+            "$RUNNER_TEMP/ghostwipe-security/sentinel.sha256"
+
+          echo "Protected test file survived Ghostwipe dry-run."
+
+      # --------------------------------------------------------
+      # Deep-clean must not silently bypass confirmation.
+      # --------------------------------------------------------
+
+      - name: Verify deep-clean confirmation protection
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          output="$(
+            printf 'NO\n' |
+              timeout 10 \
+              ./ghostwipe deep-clean 2>&1
+          )"
+
+          printf '%s\n' "$output"
+
+          echo "$output" | grep -q "Deep cleanup cancelled"
+
+          if echo "$output" | grep -q "Starting deep cleanup"; then
+            echo "::error::Deep cleanup started without WIPE confirmation."
+            exit 1
+          fi
+
+          echo "Deep-clean confirmation protection passed."
+
+  # ============================================================
+  # FINAL CI GATE
+  # ============================================================
+
+  ci-success:
+    name: Ghostwipe CI Passed
+    if: always()
+
+    needs:
+      - lint
+      - runtime
+      - security
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify all required jobs passed
+        shell: bash
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            echo "Lint job failed."
+            exit 1
+          fi
+
+          if [[ "${{ needs.runtime.result }}" != "success" ]]; then
+            echo "Runtime tests failed."
+            exit 1
+          fi
+
+          if [[ "${{ needs.security.result }}" != "success" ]]; then
+            echo "Security tests failed."
+            exit 1
+          fi
+
+          echo "Ghostwipe CI passed successfully."

@@ -9,11 +9,14 @@
 <p><strong>Cross-Platform Maintenance & Cleanup Utility for Linux and macOS</strong></p>
 
 <p>
-  <img src="https://img.shields.io/badge/version-2.1.0-blue.svg">
+  <img src="https://img.shields.io/badge/version-2.1.1-blue.svg">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS-orange.svg">
   <img src="https://img.shields.io/badge/package-APT%20%7C%20Homebrew-informational.svg">
   <img src="https://img.shields.io/badge/license-MIT-blue.svg">
   <img src="https://img.shields.io/badge/status-active-success.svg">
+  <a href="https://github.com/Daxxtropezz/ghostwipe/actions/workflows/ci.yml">
+    <img src="https://github.com/Daxxtropezz/ghostwipe/actions/workflows/ci.yml/badge.svg">
+  </a>
 </p>
 
 *A lightweight, transparent, and safety-focused maintenance utility for Debian/Ubuntu Linux and macOS.*
@@ -64,7 +67,7 @@ On macOS, Ghostwipe intentionally leaves unified/system logs to macOS instead of
 - Optional `figlet`, `lolcat`, `fastfetch`, or `neofetch` integration
 - Architecture reporting for Intel/AMD and ARM systems
 
-### Safety Improvements in v2.1.0
+### Safety Improvements in v2.1.1
 
 Ghostwipe no longer blindly performs operations such as:
 

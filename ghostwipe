@@ -3,14 +3,14 @@
 # ==============================================================================
 # Ghostwipe
 # Cross-Platform Maintenance & Cleanup Utility
-# Version: 2.1.0
+# Version: 2.1.1
 # Author: Daxxtropezz
 # Repository: https://github.com/Daxxtropezz/ghostwipe
 # ==============================================================================
 
 set -Eeuo pipefail
 
-APP_VERSION="2.1.0"
+APP_VERSION="2.1.1"
 AUTHOR="Daxxtropezz"
 REPOSITORY="https://github.com/Daxxtropezz/ghostwipe"
 
@@ -21,7 +21,6 @@ OS_NAME="$(uname -s)"
 ARCH="$(uname -m)"
 PLATFORM=""
 PLATFORM_NAME=""
-DISTRO_ID=""
 DISTRO_CODENAME=""
 PACKAGE_MANAGER=""
 
@@ -33,12 +32,10 @@ case "$OS_NAME" in
         if [[ -r /etc/os-release ]]; then
             # shellcheck disable=SC1091
             . /etc/os-release
-            DISTRO_ID="${ID:-unknown}"
             PLATFORM_NAME="${PRETTY_NAME:-${NAME:-Linux}}"
             DISTRO_CODENAME="${VERSION_CODENAME:-${UBUNTU_CODENAME:-unknown}}"
         else
             PLATFORM_NAME="Linux"
-            DISTRO_ID="unknown"
             DISTRO_CODENAME="unknown"
         fi
         ;;
@@ -46,7 +43,6 @@ case "$OS_NAME" in
         PLATFORM="macos"
         PACKAGE_MANAGER="brew"
         PLATFORM_NAME="$(sw_vers -productName 2>/dev/null || echo macOS) $(sw_vers -productVersion 2>/dev/null || true)"
-        DISTRO_ID="macos"
         DISTRO_CODENAME="$(sw_vers -buildVersion 2>/dev/null || echo unknown)"
         ;;
     *)
