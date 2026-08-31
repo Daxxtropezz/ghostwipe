@@ -1,23 +1,87 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# ==========================================================
+# ==============================================================================
 # Ghostwipe
-# Linux Maintenance & Cleanup Utility
-# Version: 2.0.0
+# Cross-Platform Maintenance & Cleanup Utility
+# Version: 2.1.0
 # Author: Daxxtropezz
-# Repository: github.com/Daxxtropezz/ghostwipe
-# Package: Launchpad PPA
-# ==========================================================
+# Repository: https://github.com/Daxxtropezz/ghostwipe
+# ==============================================================================
 
-set -e
+set -Eeuo pipefail
 
-VERSION="2.0.0"
+APP_VERSION="2.1.0"
 AUTHOR="Daxxtropezz"
-LOGFILE="/tmp/ghostwipe.log"
+REPOSITORY="https://github.com/Daxxtropezz/ghostwipe"
 
-# Colorize function - makes lolcat optional
+DRY_RUN=0
+ASSUME_YES=0
+
+OS_NAME="$(uname -s)"
+ARCH="$(uname -m)"
+PLATFORM=""
+PLATFORM_NAME=""
+DISTRO_ID=""
+DISTRO_CODENAME=""
+PACKAGE_MANAGER=""
+
+case "$OS_NAME" in
+    Linux)
+        PLATFORM="linux"
+        PACKAGE_MANAGER="apt"
+
+        if [[ -r /etc/os-release ]]; then
+            # shellcheck disable=SC1091
+            . /etc/os-release
+            DISTRO_ID="${ID:-unknown}"
+            PLATFORM_NAME="${PRETTY_NAME:-${NAME:-Linux}}"
+            DISTRO_CODENAME="${VERSION_CODENAME:-${UBUNTU_CODENAME:-unknown}}"
+        else
+            PLATFORM_NAME="Linux"
+            DISTRO_ID="unknown"
+            DISTRO_CODENAME="unknown"
+        fi
+        ;;
+    Darwin)
+        PLATFORM="macos"
+        PACKAGE_MANAGER="brew"
+        PLATFORM_NAME="$(sw_vers -productName 2>/dev/null || echo macOS) $(sw_vers -productVersion 2>/dev/null || true)"
+        DISTRO_ID="macos"
+        DISTRO_CODENAME="$(sw_vers -buildVersion 2>/dev/null || echo unknown)"
+        ;;
+    *)
+        printf '[ERROR] Unsupported operating system: %s\n' "$OS_NAME" >&2
+        exit 1
+        ;;
+esac
+
+if [[ "$PLATFORM" == "macos" ]]; then
+    STATE_DIR="${XDG_STATE_HOME:-$HOME/Library/Application Support}/Ghostwipe"
+else
+    STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ghostwipe"
+fi
+
+LOGFILE="$STATE_DIR/ghostwipe.log"
+
+mkdir -p "$STATE_DIR" 2>/dev/null || {
+    STATE_DIR="${TMPDIR:-/tmp}/ghostwipe-${USER:-user}"
+    LOGFILE="$STATE_DIR/ghostwipe.log"
+    mkdir -p "$STATE_DIR"
+}
+
+touch "$LOGFILE" 2>/dev/null || true
+chmod 600 "$LOGFILE" 2>/dev/null || true
+
+# ------------------------------------------------------------------------------
+# Output helpers
+# ------------------------------------------------------------------------------
+
+supports_color() {
+    [[ -t 1 && -z "${NO_COLOR:-}" ]]
+}
+
 colorize() {
-    if command -v lolcat >/dev/null 2>&1; then
+    if supports_color && command -v lolcat >/dev/null 2>&1; then
         lolcat
     else
         cat
@@ -25,302 +89,623 @@ colorize() {
 }
 
 log() {
-    echo "[$(date '+%F %T')] $1" >> "$LOGFILE"
+    printf '[%s] %s\n' "$(date '+%F %T')" "$*" >> "$LOGFILE" 2>/dev/null || true
 }
 
 info() {
-    echo "[INFO] $1"
-    log "$1"
+    printf '[INFO] %s\n' "$*"
+    log "INFO: $*"
 }
 
 success() {
-    echo "[SUCCESS] $1"
-    log "$1"
+    printf '[SUCCESS] %s\n' "$*"
+    log "SUCCESS: $*"
 }
 
 warning() {
-    echo "[WARNING] $1"
-    log "$1"
+    printf '[WARNING] %s\n' "$*" >&2
+    log "WARNING: $*"
 }
 
 error() {
-    echo "[ERROR] $1"
-    log "$1"
+    printf '[ERROR] %s\n' "$*" >&2
+    log "ERROR: $*"
 }
 
+on_error() {
+    local exit_code=$?
+    local line_no="${1:-unknown}"
+    error "Command failed near line $line_no (exit code $exit_code)."
+    error "See log: $LOGFILE"
+    exit "$exit_code"
+}
+trap 'on_error "$LINENO"' ERR
+
+# ------------------------------------------------------------------------------
+# Platform helpers
+# ------------------------------------------------------------------------------
+
+require_supported_platform() {
+    case "$PLATFORM" in
+        linux)
+            if ! command -v apt-get >/dev/null 2>&1; then
+                error "Ghostwipe currently supports Debian/Ubuntu Linux systems using APT."
+                error "apt-get was not found."
+                exit 1
+            fi
+            ;;
+        macos)
+            if ! command -v brew >/dev/null 2>&1; then
+                error "Homebrew is required on macOS."
+                error "Install Ghostwipe through Homebrew or install Homebrew first."
+                exit 1
+            fi
+            ;;
+    esac
+}
+
+require_sudo() {
+    if [[ "$(id -u)" -eq 0 ]]; then
+        return 0
+    fi
+
+    if ! command -v sudo >/dev/null 2>&1; then
+        error "sudo is required for this operation."
+        exit 1
+    fi
+
+    sudo -v
+}
+
+run_cmd() {
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        printf '[DRY-RUN] '
+        printf '%q ' "$@"
+        printf '\n'
+        log "DRY-RUN: $*"
+        return 0
+    fi
+
+    log "RUN: $*"
+    "$@"
+}
+
+run_root() {
+    if [[ "$(id -u)" -eq 0 ]]; then
+        run_cmd "$@"
+    else
+        run_cmd sudo "$@"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Display
+# ------------------------------------------------------------------------------
+
 show_banner() {
-    clear
-    
-    # Always show Ghostwipe banner with figlet and lolcat
+    if [[ -t 1 && "${TERM:-}" != "dumb" ]]; then
+        clear 2>/dev/null || true
+    fi
+
     if command -v figlet >/dev/null 2>&1; then
         figlet -f slant "Ghostwipe" | colorize
     else
-        echo "[NOTICE] figlet not installed - showing text banner" | colorize
-        echo "Install figlet for enhanced visual display: sudo apt install figlet" | colorize
-        echo
+        echo "Ghostwipe" | colorize
     fi
 
     echo
-    echo "Linux Maintenance & Cleanup Utility" | colorize
+    echo "Cross-Platform Maintenance & Cleanup Utility" | colorize
     echo "Author     : $AUTHOR" | colorize
-    echo "Version    : $VERSION" | colorize
-    echo "Repository : github.com/Daxxtropezz/ghostwipe" | colorize
-    echo "Package    : Launchpad PPA" | colorize
+    echo "Version    : $APP_VERSION" | colorize
+    echo "Repository : $REPOSITORY" | colorize
     echo "--------------------------------------------" | colorize
-    echo "Hostname: $(hostname)" | colorize
-    echo "User    : $(whoami)" | colorize
-    echo "OS      : $(grep PRETTY_NAME /etc/os-release | cut -d '"' -f2)" | colorize
-    echo "Kernel  : $(uname -r)" | colorize
-    echo "Date    : $(date '+%Y-%m-%d %H:%M:%S')" | colorize
+    echo "Hostname   : $(hostname)" | colorize
+    echo "User       : $(whoami)" | colorize
+    echo "OS         : $PLATFORM_NAME" | colorize
+    echo "Platform   : $PLATFORM" | colorize
+    echo "Arch       : $ARCH" | colorize
+    echo "Kernel     : $(uname -r)" | colorize
+    echo "Date       : $(date '+%Y-%m-%d %H:%M:%S')" | colorize
+
+    if [[ "$PLATFORM" == "linux" ]]; then
+        echo "Codename   : $DISTRO_CODENAME" | colorize
+    else
+        echo "Build      : $DISTRO_CODENAME" | colorize
+    fi
+
     echo
 }
 
+memory_summary() {
+    if [[ "$PLATFORM" == "linux" ]]; then
+        free -h 2>/dev/null | awk '/^Mem:/ {print $3 "/" $2}'
+    else
+        local bytes
+        bytes="$(sysctl -n hw.memsize 2>/dev/null || echo 0)"
+        awk -v b="$bytes" 'BEGIN {printf "%.1f GiB total", b/1024/1024/1024}'
+    fi
+}
+
+uptime_summary() {
+    if [[ "$PLATFORM" == "linux" ]] && uptime -p >/dev/null 2>&1; then
+        uptime -p
+    else
+        uptime
+    fi
+}
+
 show_system_info() {
+    require_supported_platform
     show_banner
-    
+
     if command -v fastfetch >/dev/null 2>&1; then
         fastfetch
     elif command -v neofetch >/dev/null 2>&1; then
         neofetch
     else
-        info "Install fastfetch or neofetch for detailed system information"
-        echo
         echo "System Information Summary:"
         echo "---------------------------"
-        echo "Distribution: $(grep PRETTY_NAME /etc/os-release | cut -d '"' -f2)"
-        echo "Kernel: $(uname -r)"
-        echo "Uptime: $(uptime -p)"
-        echo "Memory: $(free -h | awk '/^Mem:/ {print $3 "/" $2}')"
-        echo "Disk: $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
+        echo "Operating System : $PLATFORM_NAME"
+        echo "Architecture     : $ARCH"
+        echo "Kernel           : $(uname -r)"
+        echo "Uptime           : $(uptime_summary)"
+        echo "Memory           : $(memory_summary)"
+        echo "Root Disk        : $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
     fi
-    
+
     echo
+}
+
+# ------------------------------------------------------------------------------
+# Package maintenance
+# ------------------------------------------------------------------------------
+
+linux_updates() {
+    require_sudo
+
+    info "Updating APT package metadata..."
+    run_root apt-get update
+
+    info "Upgrading installed packages..."
+    run_root env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+
+    info "Removing unused dependencies..."
+    run_root env DEBIAN_FRONTEND=noninteractive apt-get autoremove -y
+
+    info "Cleaning APT package cache..."
+    run_root apt-get clean
+    run_root apt-get autoclean -y
+}
+
+macos_updates() {
+    info "Updating Homebrew metadata..."
+    run_cmd brew update
+
+    info "Upgrading Homebrew packages..."
+    run_cmd brew upgrade
+
+    info "Removing stale Homebrew files..."
+    run_cmd brew cleanup
 }
 
 run_updates() {
+    require_supported_platform
+
     echo
-    info "Updating package repositories..."
-    sudo apt update -y >/dev/null
-    success "Package repositories updated"
-    
+    case "$PLATFORM" in
+        linux) linux_updates ;;
+        macos) macos_updates ;;
+    esac
+
     echo
-    info "Upgrading installed packages..."
-    sudo apt upgrade -y
-    success "System packages upgraded"
-    
-    echo
-    info "Removing unused packages..."
-    sudo apt autoremove -y >/dev/null
-    success "Unused packages removed"
-    
-    echo
-    info "Cleaning package cache..."
-    sudo apt clean
-    sudo apt autoclean -y >/dev/null 2>&1 || true
-    success "APT cache cleaned"
+    success "System package maintenance completed"
 }
 
+# ------------------------------------------------------------------------------
+# Cleanup helpers
+# ------------------------------------------------------------------------------
+
+cleanup_owned_files() {
+    local directory="$1"
+    local days="$2"
+
+    [[ -d "$directory" ]] || return 0
+
+    info "Removing files older than $days day(s) from $directory..."
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        find "$directory" -xdev -type f -mtime "+$days" -print 2>/dev/null || true
+    else
+        find "$directory" -xdev -type f -mtime "+$days" -delete 2>/dev/null || true
+        find "$directory" -xdev -type d -empty -delete 2>/dev/null || true
+    fi
+}
+
+cleanup_linux_temp_files() {
+    local days="$1"
+    require_sudo
+
+    for directory in /tmp /var/tmp; do
+        [[ -d "$directory" ]] || continue
+        info "Removing regular files older than $days day(s) from $directory..."
+
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+            if [[ "$(id -u)" -eq 0 ]]; then
+                find "$directory" -xdev -type f -mtime "+$days" -print 2>/dev/null || true
+            else
+                sudo find "$directory" -xdev -type f -mtime "+$days" -print 2>/dev/null || true
+            fi
+        else
+            if [[ "$(id -u)" -eq 0 ]]; then
+                find "$directory" -xdev -type f -mtime "+$days" -delete 2>/dev/null || true
+            else
+                sudo find "$directory" -xdev -type f -mtime "+$days" -delete 2>/dev/null || true
+            fi
+        fi
+    done
+}
+
+cleanup_macos_temp_files() {
+    local days="$1"
+    local user_tmp="${TMPDIR:-}"
+
+    if [[ -z "$user_tmp" ]] && command -v getconf >/dev/null 2>&1; then
+        user_tmp="$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null || true)"
+    fi
+
+    if [[ -n "$user_tmp" && -d "$user_tmp" ]]; then
+        cleanup_owned_files "$user_tmp" "$days"
+    else
+        warning "Could not determine the macOS per-user temporary directory; skipping temporary-file cleanup."
+    fi
+}
+
+cleanup_user_cache() {
+    local days="$1"
+    local cache_dir
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        cache_dir="$HOME/Library/Caches"
+    else
+        cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}"
+    fi
+
+    cleanup_owned_files "$cache_dir" "$days"
+}
+
+vacuum_linux_journal() {
+    local retention="$1"
+
+    if ! command -v journalctl >/dev/null 2>&1; then
+        warning "journalctl is unavailable; skipping system journal cleanup."
+        return 0
+    fi
+
+    require_sudo
+    info "Vacuuming system journal entries older than $retention..."
+    run_root journalctl --rotate
+    run_root journalctl "--vacuum-time=$retention"
+}
+
+cleanup_package_cache() {
+    local mode="$1"
+
+    case "$PLATFORM" in
+        linux)
+            require_sudo
+            info "Removing unused APT dependencies..."
+            run_root env DEBIAN_FRONTEND=noninteractive apt-get autoremove -y
+
+            info "Cleaning APT package cache..."
+            run_root apt-get clean
+            run_root apt-get autoclean -y
+            ;;
+        macos)
+            info "Cleaning Homebrew cache and stale versions..."
+            if [[ "$mode" == "deep" ]]; then
+                run_cmd brew cleanup --prune=1
+            else
+                run_cmd brew cleanup --prune=7
+            fi
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Cleanup modes
+# ------------------------------------------------------------------------------
+
 safe_cleanup() {
+    require_supported_platform
+
     echo
-    info "Removing files older than 7 days from /tmp..."
-    sudo find /tmp -type f -atime +7 -delete 2>/dev/null || true
-    
-    echo
-    info "Removing files older than 7 days from /var/tmp..."
-    sudo find /var/tmp -type f -atime +7 -delete 2>/dev/null || true
-    
-    echo
-    info "Cleaning package cache..."
-    sudo apt clean
-    sudo apt autoclean
-    sudo apt autoremove -y
-    
-    echo
-    info "Clearing user cache..."
-    rm -rf ~/.cache/* 2>/dev/null || true
-    
-    echo
-    info "Vacuuming journals older than 7 days..."
-    sudo journalctl --vacuum-time=7d >/dev/null 2>&1 || true
-    
-    echo
-    info "Removing rotated log files..."
-    sudo find /var/log -type f -name "*.log*" -delete 2>/dev/null || true
-    
-    sudo journalctl --rotate >/dev/null 2>&1 || true
-    
+    info "Starting safe cleanup..."
+
+    if [[ "$PLATFORM" == "linux" ]]; then
+        cleanup_linux_temp_files 7
+    else
+        cleanup_macos_temp_files 7
+    fi
+
+    cleanup_package_cache "safe"
+    cleanup_user_cache 30
+
+    if [[ "$PLATFORM" == "linux" ]]; then
+        vacuum_linux_journal "7d"
+    else
+        info "macOS unified/system logs are managed by macOS; Ghostwipe does not erase them."
+    fi
+
     echo
     success "Safe cleanup completed"
 }
 
-deep_cleanup() {
-    echo
-    warning "Deep Cleanup selected"
-    echo
-    warning "Deep Cleanup will perform the following:"
-    echo
-    echo " • Remove ALL temporary files"
-    echo " • Clear user cache completely"
-    echo " • Remove ALL old logs"
-    echo " • Vacuum ALL system journals"
-    echo
-    echo "This action cannot be undone."
-    echo
-    
-    read -rp "Continue? [y/N]: " confirm
-    
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        warning "Operation cancelled"
-        exit 0
+confirm_deep_cleanup() {
+    if [[ "$ASSUME_YES" -eq 1 ]]; then
+        return 0
     fi
-    
+
     echo
-    info "Purging /tmp..."
-    sudo rm -rf /tmp/* 2>/dev/null || true
-    
+    warning "Deep cleanup removes older temporary and cache files more aggressively."
+    if [[ "$PLATFORM" == "linux" ]]; then
+        echo "Linux system journals older than one day may also be vacuumed."
+    else
+        echo "macOS unified/system logs are not manually erased."
+    fi
     echo
-    info "Purging /var/tmp..."
-    sudo rm -rf /var/tmp/* 2>/dev/null || true
-    
+    echo "Ghostwipe does not blindly wipe /tmp, /var/tmp, /var/log, or your entire cache directory."
     echo
-    info "Cleaning package cache..."
-    sudo apt clean
-    sudo apt autoclean
-    sudo apt autoremove -y
-    
+    read -rp "Type WIPE to continue: " confirm
+
+    [[ "$confirm" == "WIPE" ]]
+}
+
+deep_cleanup() {
+    require_supported_platform
+
+    if ! confirm_deep_cleanup; then
+        warning "Deep cleanup cancelled"
+        return 0
+    fi
+
     echo
-    info "Removing user cache..."
-    rm -rf ~/.cache/* 2>/dev/null || true
-    
-    echo
-    info "Rotating journals..."
-    sudo journalctl --rotate >/dev/null 2>&1 || true
-    
-    echo
-    info "Vacuuming ALL journal logs..."
-    sudo journalctl --vacuum-time=1s >/dev/null 2>&1 || true
-    
-    echo
-    info "Removing old log files..."
-    sudo find /var/log -type f -name "*.log*" -delete 2>/dev/null || true
-    
+    info "Starting deep cleanup..."
+
+    if [[ "$PLATFORM" == "linux" ]]; then
+        cleanup_linux_temp_files 1
+    else
+        cleanup_macos_temp_files 1
+    fi
+
+    cleanup_package_cache "deep"
+    cleanup_user_cache 7
+
+    if [[ "$PLATFORM" == "linux" ]]; then
+        vacuum_linux_journal "1d"
+    else
+        info "macOS unified/system logs are managed by macOS; Ghostwipe does not erase them."
+    fi
+
     echo
     success "Deep cleanup completed"
 }
 
+full_maintenance() {
+    run_updates
+    safe_cleanup
+}
+
+# ------------------------------------------------------------------------------
+# Diagnostics
+# ------------------------------------------------------------------------------
+
+doctor() {
+    require_supported_platform
+
+    local failures=0
+
+    echo "Ghostwipe Doctor"
+    echo "----------------"
+    printf 'OS:                %s\n' "$PLATFORM_NAME"
+    printf 'Platform:          %s\n' "$PLATFORM"
+    printf 'Architecture:      %s\n' "$ARCH"
+    printf 'Package manager:   '
+
+    if command -v "$PACKAGE_MANAGER" >/dev/null 2>&1; then
+        echo "OK ($(command -v "$PACKAGE_MANAGER"))"
+    else
+        echo "MISSING"
+        failures=$((failures + 1))
+    fi
+
+    if [[ "$PLATFORM" == "linux" ]]; then
+        printf 'sudo:              '
+        if [[ "$(id -u)" -eq 0 ]]; then
+            echo "not required (running as root)"
+        elif command -v sudo >/dev/null 2>&1; then
+            echo "OK ($(command -v sudo))"
+        else
+            echo "MISSING"
+            failures=$((failures + 1))
+        fi
+
+        printf 'journalctl:        '
+        command -v journalctl >/dev/null 2>&1 && echo "available" || echo "optional / unavailable"
+    else
+        printf 'Homebrew prefix:   %s\n' "$(brew --prefix 2>/dev/null || echo unknown)"
+    fi
+
+    printf 'figlet:            '
+    command -v figlet >/dev/null 2>&1 && echo "installed" || echo "optional / not installed"
+
+    printf 'lolcat:            '
+    command -v lolcat >/dev/null 2>&1 && echo "installed" || echo "optional / not installed"
+
+    printf 'Log file:          %s\n' "$LOGFILE"
+
+    echo
+    if [[ "$failures" -eq 0 ]]; then
+        success "Required dependencies look good"
+    else
+        error "$failures required dependency check(s) failed"
+        return 1
+    fi
+}
+
+show_log() {
+    if [[ ! -s "$LOGFILE" ]]; then
+        info "No Ghostwipe log entries yet."
+        return 0
+    fi
+
+    tail -n 100 "$LOGFILE"
+}
+
+# ------------------------------------------------------------------------------
+# CLI
+# ------------------------------------------------------------------------------
+
+show_version() {
+    echo "Ghostwipe v$APP_VERSION"
+}
+
+show_help() {
+    cat <<EOF
+Ghostwipe v$APP_VERSION
+Cross-Platform Maintenance & Cleanup Utility
+
+Supported platforms:
+  - Debian/Ubuntu Linux with APT
+  - macOS with Homebrew
+
+Usage:
+  ghostwipe [global options] [command]
+
+Commands:
+  update          Update installed packages
+  clean           Safe cleanup (recommended)
+  deep-clean      More aggressive, bounded cleanup
+  full            Run update followed by safe cleanup
+  info            Show system information
+  doctor          Check Ghostwipe requirements
+  log             Show the latest Ghostwipe log entries
+  version         Show version
+  help            Show this help
+
+Global options:
+  --dry-run       Preview maintenance actions without changing the system
+  -y, --yes       Skip deep-clean confirmation
+  -h, --help      Show help
+  -v, --version   Show version
+
+Examples:
+  ghostwipe clean
+  ghostwipe --dry-run clean
+  ghostwipe --dry-run deep-clean
+  ghostwipe --yes deep-clean
+  ghostwipe doctor
+
+Safety:
+  Ghostwipe uses age-bounded cleanup and does not blindly erase /var/log,
+  system-wide temporary directories, or entire user cache directories.
+  On macOS, unified/system logs are left to macOS.
+
+EOF
+}
+
 show_menu() {
+    require_supported_platform
+
     while true; do
         show_banner
-        
-        echo "[1] System Update & Upgrade" | colorize
+
+        echo "[1] System / Package Update" | colorize
         echo "[2] Safe Cleanup (Recommended)" | colorize
         echo "[3] Deep Cleanup" | colorize
         echo "[4] System Information" | colorize
         echo "[5] Full Maintenance" | colorize
+        echo "[6] Doctor / Diagnostics" | colorize
+        echo "[7] View Log" | colorize
         echo "[0] Exit" | colorize
         echo
-        
+
         read -rp "Select an option: " option
-        
         echo
-        
+
         case "$option" in
-            1)
-                run_updates
-                ;;
-            2)
-                safe_cleanup
-                ;;
-            3)
-                deep_cleanup
-                ;;
-            4)
-                show_system_info
-                read -rp "Press Enter to continue..."
-                ;;
-            5)
-                run_updates
-                safe_cleanup
-                ;;
+            1) run_updates ;;
+            2) safe_cleanup ;;
+            3) deep_cleanup ;;
+            4) show_system_info ;;
+            5) full_maintenance ;;
+            6) doctor ;;
+            7) show_log ;;
             0)
-                echo
                 echo "Goodbye." | colorize
-                exit 0
+                return 0
                 ;;
             *)
                 error "Invalid option"
                 ;;
         esac
-        
-        if [[ "$option" =~ ^[1-5]$ ]]; then
-            echo
-            success "Task completed"
+
+        if [[ "$option" =~ ^[1-7]$ ]]; then
             echo
             read -rp "Press Enter to continue..."
         fi
     done
 }
 
-show_version() {
-    echo "Ghostwipe v$VERSION" | colorize
-    echo "Author: $AUTHOR" | colorize
+parse_args() {
+    local command=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)
+                DRY_RUN=1
+                shift
+                ;;
+            -y|--yes)
+                ASSUME_YES=1
+                shift
+                ;;
+            -h|--help)
+                show_help
+                return 0
+                ;;
+            -v|--version)
+                show_version
+                return 0
+                ;;
+            update|clean|deep-clean|full|info|doctor|log|version|help)
+                if [[ -n "$command" ]]; then
+                    error "Only one command may be specified."
+                    return 2
+                fi
+                command="$1"
+                shift
+                ;;
+            *)
+                error "Unknown argument: $1"
+                echo
+                show_help
+                return 2
+                ;;
+        esac
+    done
+
+    case "$command" in
+        update) run_updates ;;
+        clean) safe_cleanup ;;
+        deep-clean) deep_cleanup ;;
+        full) full_maintenance ;;
+        info) show_system_info ;;
+        doctor) doctor ;;
+        log) show_log ;;
+        version) show_version ;;
+        help) show_help ;;
+        "") show_menu ;;
+    esac
 }
 
-show_help() {
-    cat << EOF
-Ghostwipe v$VERSION
-
-Usage:
-  ghostwipe                Launch interactive menu
-  ghostwipe update         Update and upgrade system
-  ghostwipe clean          Safe cleanup
-  ghostwipe deep-clean     Deep cleanup
-  ghostwipe info           Show system information
-  ghostwipe version        Show version
-  ghostwipe help           Show help
-
-EOF
-}
-
-# Main command handler
-case "${1:-}" in
-    update)
-        show_banner
-        run_updates
-        ;;
-    
-    clean)
-        show_banner
-        safe_cleanup
-        ;;
-    
-    deep-clean)
-        show_banner
-        deep_cleanup
-        ;;
-    
-    info)
-        show_system_info
-        ;;
-    
-    version|--version|-v)
-        show_version
-        ;;
-    
-    help|--help|-h)
-        show_help
-        ;;
-    
-    "")
-        show_menu
-        ;;
-    
-    *)
-        error "Unknown command: $1"
-        echo
-        show_help
-        exit 1
-        ;;
-esac
-
-exit 0
+parse_args "$@"
