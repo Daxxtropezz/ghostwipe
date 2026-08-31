@@ -1,5 +1,5 @@
 ghostwipe (2.1.2~resolute) resolute; urgency=medium
 
-  * Fix: Remove unused variables.
+  * Version 2.1.2, cleanup.
 
- -- Daxxtropezz <miraflores.john@gmail.com>  Mon, 31 Aug 2026 17:00:56 +0800
+ -- Daxxtropezz <miraflores.john@gmail.com>  Mon, 31 Aug 2026 18:05:35 +0800
