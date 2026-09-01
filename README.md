@@ -29,15 +29,18 @@
 
 `ghostwipe` is an open-source system maintenance utility that provides one consistent CLI for routine cleanup and package maintenance across **Debian/Ubuntu Linux** and **macOS**.
 
-Ghostwipe automatically detects the host operating system and uses the appropriate platform backend:
+The main `ghostwipe` CLI automatically detects the host operating system and uses the appropriate platform backend:
 
 | Platform | Package Backend | Cleanup Behavior |
 | --- | --- | --- |
-| Debian / Ubuntu Linux | APT | APT cleanup, age-bounded `/tmp` and `/var/tmp` cleanup, user cache cleanup, systemd journal vacuum |
-| macOS | Homebrew | Homebrew cleanup, per-user temporary-directory cleanup, `~/Library/Caches` cleanup |
-| Other operating systems | — | Not supported |
+| Debian / Ubuntu Linux | APT | APT maintenance, age-bounded `/tmp` and `/var/tmp` cleanup, user cache cleanup, systemd journal vacuum |
+| macOS | Homebrew | Homebrew maintenance, per-user temporary-directory cleanup, `~/Library/Caches` cleanup |
+| Other operating systems | — | Not supported by the main CLI |
 
 On macOS, Ghostwipe intentionally leaves unified/system logs to macOS instead of force-deleting them.
+
+> **Windows is separate from the main Ghostwipe CLI.**  
+> This repository also contains optional PowerShell maintenance utilities for Windows. They are **repository-only scripts** and are not distributed through the Launchpad PPA or Homebrew tap. See [Windows Repository Utilities](#windows-repository-utilities).
 
 ---
 
@@ -84,6 +87,8 @@ Instead, cleanup is bounded by file age and platform-specific directories. Ghost
 
 ## Supported Platforms
 
+The main `ghostwipe` CLI supports:
+
 | Platform | Architecture | Supported |
 | --- | --- | :---: |
 | Ubuntu / Debian Linux | x86_64 / amd64 | ✅ |
@@ -104,6 +109,8 @@ Instead, cleanup is bounded by file age and platform-specific directories. Ghost
 - Homebrew
 
 Homebrew commands are never executed with `sudo`.
+
+Windows is **not** a supported platform for the main Bash-based `ghostwipe` CLI. Windows functionality is provided separately through repository PowerShell scripts documented later in this README.
 
 ---
 
@@ -371,33 +378,213 @@ Ghostwipe does not replace operating-system lifecycle management, monitoring, ba
 
 ---
 
-## Repository Structure
+## Windows Repository Utilities
 
-```text
-ghostwipe/
-├── ghostwipe
-├── README.md
-├── LICENSE
-├── .gitignore
-├── assets/
-└── debian/
-    ├── changelog
-    ├── control
-    ├── copyright
-    ├── install
-    ├── rules
-    └── source/
-        └── format
+> **Separate from the main Ghostwipe distribution**
+>
+> The Windows PowerShell utilities in this repository are **not part of the Launchpad PPA package or the Homebrew tap**. Installing `ghostwipe` through APT, the Launchpad PPA, or Homebrew does not install or expose these Windows scripts.
+>
+> They are repository-based companion utilities intended to be run directly from a local copy of the Ghostwipe project.
+
+The Windows utilities currently consist of:
+
+- `scripts/windows-maintenance.ps1` — interactive Windows maintenance menu
+- `scripts/update-windows-apps.ps1` — WinGet application update helper used directly or by the maintenance menu
+
+The Windows scripts do not turn the main Bash-based `ghostwipe` CLI into a Windows command. They are separate PowerShell utilities maintained in the same project repository.
+
+### Windows Requirements
+
+- Windows
+- Windows PowerShell 5.1 or later
+- WinGet (`winget.exe`) for application updates
+- Administrator access when Windows requests elevation for system-level maintenance
+- A local Ghostwipe repository directory containing the PowerShell scripts under `scripts/`
+
+### Obtaining the Windows Scripts
+
+The Windows scripts are intended to be executed **from within the Ghostwipe repository directory**.
+
+There are two supported ways to obtain them.
+
+#### Option 1 — Clone the Entire Project
+
+```powershell
+git clone https://github.com/Daxxtropezz/ghostwipe.git
+cd ghostwipe
 ```
 
-The Homebrew formula lives in the separate tap repository:
+The required scripts should then be available under:
 
 ```text
-homebrew-tap/
-└── Formula/
-    ├── ztk.rb
-    └── ghostwipe.rb
+.\scripts\windows-maintenance.ps1
+.\scripts\update-windows-apps.ps1
 ```
+
+#### Option 2 — Download the Scripts into the Repository
+
+If you already have the Ghostwipe repository directory, download both PowerShell files into its `scripts` directory:
+
+```text
+ghostwipe\
+└── scripts\
+    ├── windows-maintenance.ps1
+    └── update-windows-apps.ps1
+```
+
+Keep both files together. `windows-maintenance.ps1` expects `update-windows-apps.ps1` to be located beside it when the application-update option is selected.
+
+> Running the maintenance script as an unrelated standalone file outside the Ghostwipe repository layout is not the supported usage model.
+
+### Windows Maintenance Menu
+
+From the **Ghostwipe repository root**, launch:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/windows-maintenance.ps1
+```
+
+The script opens an interactive menu:
+
+```text
+==============================================
+       Ghostwipe Windows Maintenance
+==============================================
+
+  [1] Update installed applications
+  [2] Clear TEMP, Windows Temp, and Prefetch
+  [3] Empty Recycle Bin
+  [4] Repair Windows (SFC -> DISM -> SFC)
+  [5] Run all maintenance
+  [0] Exit
+
+Select an option:
+```
+
+#### Option 1 — Update Installed Applications
+
+Uses the separate `update-windows-apps.ps1` helper to update installed applications through WinGet.
+
+The updater checks for WinGet and then runs:
+
+```text
+winget upgrade --all --silent --accept-package-agreements --accept-source-agreements --include-unknown
+```
+
+Example output when no installed applications require an update:
+
+```text
+[Ghostwipe] Checking for WinGet...
+[Ghostwipe] Checking for available application updates...
+No installed package found matching input criteria.
+[Ghostwipe] Application update process completed successfully.
+```
+
+The maintenance menu itself does not need to be launched as Administrator for this option. Individual application installers may still display a Windows UAC prompt if their own installation process requires elevation.
+
+#### Option 2 — Clear Temporary Files
+
+Clears contents from:
+
+```text
+%TEMP%
+C:\Windows\Temp
+C:\Windows\Prefetch
+```
+
+Files that are locked or currently in use are skipped rather than causing the entire cleanup operation to fail.
+
+Cleaning `C:\Windows\Temp` and `C:\Windows\Prefetch` requires administrator privileges. If the menu was launched normally, Ghostwipe requests elevation through Windows UAC when this option is selected.
+
+> Clearing Prefetch data is not normally required for routine Windows operation and may temporarily make some application launches slower while Windows rebuilds its prefetch information.
+
+#### Option 3 — Empty Recycle Bin
+
+Uses PowerShell to empty the Windows Recycle Bin:
+
+```text
+Clear-RecycleBin -Force
+```
+
+If the Recycle Bin is already empty, the script continues without treating that condition as a fatal error.
+
+#### Option 4 — Repair Windows
+
+Runs the Windows repair sequence in this order:
+
+```text
+sfc /scannow
+DISM /Online /Cleanup-Image /RestoreHealth
+sfc /scannow
+```
+
+The first SFC scan checks and attempts to repair protected Windows system files.
+
+DISM then checks the Windows component store and repairs the system image when required.
+
+SFC runs again after DISM so protected system files can be checked against the repaired component store.
+
+This operation requires administrator privileges. Ghostwipe requests elevation through Windows UAC when necessary.
+
+#### Option 5 — Run All Maintenance
+
+Runs the available Windows maintenance tasks in sequence:
+
+1. Update installed applications
+2. Clear temporary files
+3. Empty the Recycle Bin
+4. Run the SFC → DISM → SFC repair sequence
+
+Because this selection includes system-level cleanup and Windows repair commands, administrator elevation is requested through UAC when needed.
+
+### Administrator Privileges on Windows
+
+The Windows maintenance menu does **not** require Administrator privileges simply to start.
+
+Run it normally:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/windows-maintenance.ps1
+```
+
+When an administrator-only selection is chosen, Ghostwipe requests elevation through Windows UAC and relaunches that selected operation with the required permissions.
+
+This avoids requiring every user to manually open PowerShell as Administrator before they can view or use the menu.
+
+If UAC elevation is declined, the administrator-only action is not performed.
+
+### Run the Application Updater Directly
+
+The WinGet helper can also be run directly from the repository root:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/update-windows-apps.ps1
+```
+
+It is intended to remain inside the repository's `scripts` directory.
+
+The updater:
+
+- checks whether `winget.exe` is available;
+- checks installed applications for available upgrades;
+- accepts WinGet package and source agreements automatically;
+- attempts to upgrade all supported installed packages;
+- reports failures using concise `[Ghostwipe]` messages instead of requiring administrator privileges before the script can start.
+
+### Windows Safety Notes
+
+The Windows maintenance utilities perform real system maintenance operations.
+
+Before using the cleanup or repair options:
+
+- save active work;
+- allow applications using temporary files to close normally when possible;
+- understand that files currently in use may be skipped;
+- do not interrupt SFC or DISM while they are actively repairing Windows;
+- keep normal backups and recovery procedures for important systems.
+
+The Windows PowerShell utilities do not replace Windows Update, endpoint management, backups, malware protection, or vendor-specific repair tools.
+
 
 ---
 
@@ -412,6 +599,8 @@ Ghostwipe aims to remain:
 - Automation-friendly
 - Cross-platform where behavior can be implemented safely
 - Distributed through native or familiar package channels
+
+The Windows repository utilities follow the same transparency and safety goals while remaining separate from the packaged Linux/macOS Ghostwipe CLI.
 
 ---
 
