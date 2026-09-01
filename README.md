@@ -35,7 +35,7 @@ The main `ghostwipe` CLI automatically detects the host operating system and use
 | --- | --- | --- |
 | Debian / Ubuntu Linux | APT | APT maintenance, age-bounded `/tmp` and `/var/tmp` cleanup, user cache cleanup, systemd journal vacuum |
 | macOS | Homebrew | Homebrew maintenance, per-user temporary-directory cleanup, `~/Library/Caches` cleanup |
-| Other operating systems | — | Not supported by the main CLI |
+| Windows | PowerShell | Not supported by the main CLI |
 
 On macOS, Ghostwipe intentionally leaves unified/system logs to macOS instead of force-deleting them.
 
